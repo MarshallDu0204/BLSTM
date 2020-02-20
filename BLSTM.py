@@ -7,21 +7,33 @@ import csv
 
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
-from keras.models import Sequential
-from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout
+from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout,concatenate,Flatten
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
+from keras import Input,Model
 
 class rnnRunner():
 
 	wordIndex = {}
 	maxlen = 60
+	keyLen = 2
+	keyList = []
+	keyIndex = {}
 
 	def get_index(self,sentence):#turn word to index
 		sequence = []
 		for word in sentence:
 			try:
 				sequence.append(self.wordIndex[word])
+			except KeyError:
+				pass
+		return sequence
+
+	def get_key_index(self,sentence):
+		sequence = []
+		for word in sentence:
+			try:
+				sequence.append(self.keyIndex[word])
 			except KeyError:
 				pass
 		return sequence
@@ -43,12 +55,23 @@ class rnnRunner():
 		content = processor.preprocessing(content)
 		processor.outputResult(content)
 
+	def processValidationData(self,path = "validation.csv"):
+		processor = dataProcessor.dataProcessor()
+		userID,keyword,content = processor.readTrainingData(path=path)
+		keyContent = processor.preprocessing(content,mode = 1,keyList = self.keyList)
+		keySeq = list(map(self.get_key_index,keyContent))
+		keySeq = pad_sequences(keySeq,maxlen = 2,padding = 'post')
+		return keySeq
 
 	def getData(self):
 		vec = word2vec.word2vec()
-		trainingData,embedding_matrix,wordIndex = vec.getTrainingData()
-		label = vec.getLabel()
+		label = vec.getLabelAndKey()
+		trainingData,embedding_matrix,wordIndex,keyValue,key_embedding_matrix,keyIndex,keyList = vec.getTrainingData()
 
+		self.keyList = keyList
+
+		self.keyIndex = keyIndex
+		
 		self.wordIndex = wordIndex
 
 		newLabeltrain = []
@@ -56,6 +79,8 @@ class rnnRunner():
 		self.maxlen = 60#the median of the reddit length is 58.5 so 60 is used
 		trainingData = pad_sequences(trainingData, maxlen=self.maxlen,padding = 'post')#convert all the reddit to length of 65
 
+		self.keyLen = 2
+		keyValue = pad_sequences(keyValue, maxlen=self.keyLen,padding = 'post')
 		
 		#code to generate all 0 fake label to test the model
 		newLabel = []
@@ -65,64 +90,110 @@ class rnnRunner():
 		label = np.array(label)
 		#end fake code here
 
+		extentTrainingData = []
+		for i in range(len(trainingData)):
+			extentTrainingData.append([trainingData[i],keyValue[i]])
+
 		label = keras.utils.to_categorical(label,num_classes = 5)#convert the label to one_hot number can be adjust to final category num
 
 		data_train, data_test, label_train, label_test = train_test_split(#split the training set and testing set
-			trainingData,
+			extentTrainingData,
 			label,
 			test_size=0.1,
 			random_state=30)
 
-		return data_train,data_test,label_train,label_test,embedding_matrix,self.maxlen
+		new_data_train = []
+		new_key_train =	[]
+
+		for i in range(len(data_train)):
+			new_data_train.append(data_train[i][0])
+			new_key_train.append(data_train[i][1])
+
+		new_data_test = []
+		new_key_test = []
+
+		for i in range(len(data_test)):
+			new_data_test.append(data_test[i][0])
+			new_key_test.append(data_test[i][1])
+
+		return new_data_train,new_key_train,new_data_test,new_key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,self.maxlen,self.keyLen
 
 class BLSTM():
 
 	data_train = ""
+	key_train = ""
 	data_test = ""
+	key_test = ""
 	label_train = ""
 	label_test = ""
 	embedding_matrix = ""
+	key_embedding_matrix = ""
 	maxlen = ""
 
-	def __init__(self,data_train,data_test,label_train,label_test,embedding_matrix,maxlen):
+	def __init__(self,data_train,key_train,data_test,key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,maxlen,keylen):
 		self.data_train = data_train
+		self.key_train = key_train
 		self.data_test = data_test
+		self.key_test = key_test
 		self.label_train = label_train
 		self.label_test = label_test
 		self.embedding_matrix = embedding_matrix
+		self.key_embedding_matrix = key_embedding_matrix
 		self.maxlen = maxlen
+		self.keylen = keylen
 
-	def lstmModel(self,pretrained_weights = None):
+	def lstmModel(self,pretrained_weights = 'BLSTM.hdf5'):
 
-		model = Sequential()
+		inputContent = Input(shape = (self.maxlen,),name = 'content')
+		inputKey = Input(shape = (self.keylen,),name = 'key')
 
-		model.add(Embedding(
+		content = Embedding(
 				input_dim = self.embedding_matrix.shape[0],
 				output_dim = self.embedding_matrix.shape[1],
 				input_length = self.maxlen,
 				weights = [self.embedding_matrix],#use the index to retrive the word vector from embedding_matrix
 				trainable = False
-				))
+				)(inputContent)
 
-		model.add(Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
-		model.add(Dropout(0.1))
-		model.add(Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
-		model.add(Dropout(0.1))
-		model.add(Bidirectional(LSTM(256,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
-		model.add(Dropout(0.1))
-		model.add(LSTM(256,recurrent_dropout = 0.1))#convert the sentence to one result
-		model.add(Dropout(0.1))
-		model.add(Dense(256, activation='sigmoid'))
-		model.add(Dropout(0.25))
-		model.add(Dense(5, activation='softmax'))#softmax output
+		key = Embedding(
+				input_dim = self.key_embedding_matrix.shape[0],
+				output_dim = self.key_embedding_matrix.shape[1],
+				input_length = self.keylen,
+				weights = [self.key_embedding_matrix],#use the index to retrive the word vector from embedding_matrix
+				trainable = False
+				)(inputKey)
+
+		content = Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave')(content)
+		content = Dropout(0.1)(content)
+		content = Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave')(content)
+		content = Dropout(0.1)(content)
+		content = Bidirectional(LSTM(256,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave')(content)
+		content = Dropout(0.1)(content)
 		
+		content = LSTM(128,recurrent_dropout = 0.1)(content)
+		content = Dropout(0.1)(content)
+
+		
+		key = Bidirectional(LSTM(10,recurrent_dropout = 0.1),merge_mode = 'ave')(key)
+		key = Dropout(0.1)(key)
+
+		x =  concatenate([content,key])
+
+
+		x = Dense(128,activation = 'sigmoid')(x)
+
+		x = Dropout(0.25)(x)
+
+		output = Dense(5,activation = 'softmax')(x)
+
+		model = Model(inputs=[inputContent,inputKey], outputs=[output])
 
 		model.compile(
 			optimizer=Adam(lr = 1e-4),
 			loss="categorical_crossentropy",
 			metrics=['accuracy']
 		)
-
+		
 		if(pretrained_weights):
 			model.load_weights(pretrained_weights)
 
@@ -133,11 +204,11 @@ class BLSTM():
 		model_checkpoint = ModelCheckpoint('BLSTM.hdf5',monitor = 'loss',verbose = 1,save_best_only = True)
 
 		history = model.fit(
-			x = self.data_train,
+			x = [self.data_train,self.key_train],
 			y = self.label_train,
-			validation_data = [self.data_test,self.label_test],
+			validation_data = [[self.data_test,self.key_test],self.label_test],
 			batch_size = 10,
-			epochs = 5,
+			epochs = 1,
 			callbacks = [model_checkpoint]
 		)
 
@@ -147,7 +218,9 @@ class BLSTM():
 
 		dataSeq = rnnRunner.getSeq()
 
-		result = model.predict(dataSeq,batch_size = 10)#predict the result
+		keySeq = rnnRunner.processValidationData(path = testDataPath)
+
+		result = model.predict([dataSeq,keySeq],batch_size = 10)#predict the result
 
 		i = 0
 
@@ -168,11 +241,16 @@ class BLSTM():
 def main():
 	runner = rnnRunner()
 	runner.preProcessData()
-	data_train,data_test,label_train,label_test,embedding_matrix,maxlen = runner.getData()
-	rnn = BLSTM(data_train,data_test,label_train,label_test,embedding_matrix,maxlen)
+	data_train,key_train,data_test,key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,maxlen,keylen = runner.getData()
+	
+
+	rnn = BLSTM(data_train,key_train,data_test,key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,maxlen,keylen)
 	model = rnn.lstmModel()
 	rnn.train(model)
-	#rnn.predictResult(model,runner)
+	rnn.predictResult(model,runner)	
+	
 
 if __name__ == '__main__':
 	main()
+
+

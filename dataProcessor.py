@@ -48,16 +48,22 @@ class dataProcessor():
 		return info,k
 
 
-	def preprocessing(self,content):
+	def preprocessing(self,content,mode = 0,keyList = []):
+		keyContent = []
 		newContent = []
 		contentLength = []
+		keyLen = []
 		p = porter.PorterStemmer()
 		for line in content:
+			tempKeyList = []
 			newLine = []
 			line = line.split(" ")
 			for word in line:
 				word = word.strip()#clean the '\n' 
 				word = word.lower()	#change to lowercase
+				if mode == 1:
+					if word in keyList:
+						tempKeyList.append(word)
 				word = p.stem(word)#stem the word
 				cleanWord = word.translate(str.maketrans('','', string.punctuation)) #remove the punctuation
 				if cleanWord not in self.stopSet:#remove stop word
@@ -65,8 +71,10 @@ class dataProcessor():
 						cleanWord,wordLen = self.cWord(cleanWord)
 						if wordLen<25 and wordLen>=1:
 							newLine.append(cleanWord)
+
+			keyContent.append(tempKeyList)
 			contentLength.append(len(newLine))
-			
+			keyLen.append(len(tempKeyList))
 			newContent.append(newLine)
 		# code to generate the histogram of the reddit length
 		'''
@@ -75,7 +83,11 @@ class dataProcessor():
 		plt.show()
 		'''
 		print(np.median(contentLength))
-		return newContent
+		print(np.median(keyLen))
+		if mode == 0:
+			return newContent
+		else:
+			return keyContent
 
 	def outputResult(self,content,contentpath = "result.txt"):
 		with open(contentpath,"w",encoding = 'utf-8') as f:
