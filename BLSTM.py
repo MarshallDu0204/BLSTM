@@ -8,7 +8,7 @@ import csv
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
-from keras.layers import Embedding,Flatten,Dense,Bidirectional,LSTM,Dropout
+from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout
 from keras.optimizers import Adam
 from keras.callbacks import ModelCheckpoint
 
@@ -104,13 +104,15 @@ class BLSTM():
 				trainable = False
 				))
 
-		model.add(Bidirectional(LSTM(128,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
+		model.add(Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
 		model.add(Dropout(0.1))
-		model.add(Bidirectional(LSTM(128,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
+		model.add(Bidirectional(LSTM(512,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
 		model.add(Dropout(0.1))
-		model.add(LSTM(128,recurrent_dropout = 0.1))#convert the sentence to one result
+		model.add(Bidirectional(LSTM(256,return_sequences=True,recurrent_dropout=0.1),merge_mode='ave'))#merge two lstm together
 		model.add(Dropout(0.1))
-		model.add(Dense(128, activation='sigmoid'))
+		model.add(LSTM(256,recurrent_dropout = 0.1))#convert the sentence to one result
+		model.add(Dropout(0.1))
+		model.add(Dense(256, activation='sigmoid'))
 		model.add(Dropout(0.25))
 		model.add(Dense(5, activation='softmax'))#softmax output
 		
