@@ -89,8 +89,3 @@ class dataProcessor():
 				info = info+"\n"
 				f.write(info)
 			f.close()
-
-processor = dataProcessor()
-userID,keyword,content = processor.readTrainingData()
-content = processor.preprocessing(content)
-processor.outputResult(content)

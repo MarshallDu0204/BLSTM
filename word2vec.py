@@ -67,6 +67,6 @@ class word2vec():
 			embeddings_matrix[i] = w2v_model.wv[wordList[i]]
 		
 		trainingIndex = list(map(self.get_index,newContent))#get the sequenced sentence
-		return trainingIndex,embeddings_matrix
+		return trainingIndex,embeddings_matrix,self.wordIndex
 
 
