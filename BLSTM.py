@@ -83,7 +83,6 @@ class BLSTM():
 	label_test = ""
 	embedding_matrix = ""
 	maxlen = ""
-	model_type = 0
 
 	def __init__(self,data_train,data_test,label_train,label_test,embedding_matrix,maxlen):
 		self.data_train = data_train
