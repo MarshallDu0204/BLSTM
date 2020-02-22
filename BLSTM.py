@@ -39,14 +39,10 @@ class rnnRunner():
 		return sequence
 
 	def getSeq(self):
-
 		newVec = word2vec.word2vec()
 		content = newVec.readData()
-
 		sequence = list(map(self.get_index,content))
-
 		sequence = pad_sequences(sequence, maxlen=self.maxlen,padding = 'post')
-
 		return sequence
 
 	def preProcessData(self,path = "data.csv"):
@@ -142,7 +138,7 @@ class BLSTM():
 		self.maxlen = maxlen
 		self.keylen = keylen
 
-	def lstmModel(self,pretrained_weights = 'BLSTM.hdf5'):
+	def lstmModel(self,pretrained_weights = None):
 
 		inputContent = Input(shape = (self.maxlen,),name = 'content')
 		inputKey = Input(shape = (self.keylen,),name = 'key')
@@ -173,12 +169,10 @@ class BLSTM():
 		content = LSTM(128,recurrent_dropout = 0.1)(content)
 		content = Dropout(0.1)(content)
 
-		
 		key = Bidirectional(LSTM(10,recurrent_dropout = 0.1),merge_mode = 'ave')(key)
 		key = Dropout(0.1)(key)
 
 		x =  concatenate([content,key])
-
 
 		x = Dense(128,activation = 'sigmoid')(x)
 
@@ -201,29 +195,25 @@ class BLSTM():
 
 	def train(self,model):
 
-		model_checkpoint = ModelCheckpoint('BLSTM.hdf5',monitor = 'loss',verbose = 1,save_best_only = True)
+		model_checkpoint = ModelCheckpoint('Model.hdf5',monitor = 'loss',verbose = 1,save_best_only = True)
 
 		history = model.fit(
 			x = [self.data_train,self.key_train],
 			y = self.label_train,
 			validation_data = [[self.data_test,self.key_test],self.label_test],
 			batch_size = 10,
-			epochs = 1,
+			epochs = 5,
 			callbacks = [model_checkpoint]
 		)
 
 	def predictResult(self,model,rnnRunner,testDataPath = "validation.csv",outputPath = "class.csv"):
 
 		rnnRunner.preProcessData(path = testDataPath)
-
 		dataSeq = rnnRunner.getSeq()
-
 		keySeq = rnnRunner.processValidationData(path = testDataPath)
 
 		result = model.predict([dataSeq,keySeq],batch_size = 10)#predict the result
-
 		i = 0
-
 		resultList = []
 
 		while i!=len(result):
@@ -243,7 +233,6 @@ def main():
 	runner.preProcessData()
 	data_train,key_train,data_test,key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,maxlen,keylen = runner.getData()
 	
-
 	rnn = BLSTM(data_train,key_train,data_test,key_test,label_train,label_test,embedding_matrix,key_embedding_matrix,maxlen,keylen)
 	model = rnn.lstmModel()
 	rnn.train(model)
