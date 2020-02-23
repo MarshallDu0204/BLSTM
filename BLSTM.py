@@ -79,18 +79,20 @@ class rnnRunner():
 		keyValue = pad_sequences(keyValue, maxlen=self.keyLen,padding = 'post')
 		
 		#code to generate all 0 fake label to test the model
+		'''
 		newLabel = []
 		for i in range(len(label)):
 			newLabel.append(0)
 		label = newLabel
 		label = np.array(label)
 		#end fake code here
+		'''
 
 		extentTrainingData = []
 		for i in range(len(trainingData)):
 			extentTrainingData.append([trainingData[i],keyValue[i]])
 
-		label = keras.utils.to_categorical(label,num_classes = 5)#convert the label to one_hot number can be adjust to final category num
+		label = keras.utils.to_categorical(label,num_classes = 6)#convert the label to one_hot number can be adjust to final category num
 
 		data_train, data_test, label_train, label_test = train_test_split(#split the training set and testing set
 			extentTrainingData,
@@ -178,7 +180,7 @@ class BLSTM():
 
 		x = Dropout(0.25)(x)
 
-		output = Dense(5,activation = 'softmax')(x)
+		output = Dense(6,activation = 'softmax')(x)
 
 		model = Model(inputs=[inputContent,inputKey], outputs=[output])
 
