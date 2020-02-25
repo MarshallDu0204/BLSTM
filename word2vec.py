@@ -5,13 +5,9 @@ import csv
 class word2vec():
 
 	wordIndex = ""
-	keyIndex = ""
-	keyWord = []
 
-
-	def getLabelAndKey(self,path = "data.csv"):#read the label
+	def getLabel(self,path = "data.csv"):#read the label
 		label = []
-		keyWord = []
 		trainingData = []
 		
 		with open(path,'r',encoding = 'utf-8') as file:
@@ -21,8 +17,7 @@ class word2vec():
 			trainingData = trainingData[1:len(trainingData)-1]
 			for element in trainingData:
 				label.append(element[2])  
-				keyWord.append(element[4].split("^"))
-			self.keyWord = keyWord
+
 		return label
 
 	def readData(self):#read the processed data
@@ -41,35 +36,14 @@ class word2vec():
 				newContent.append(newLine)
 		return newContent
 
-	def model(self,newContent,size=400,window = 5,min_count = 2,mode = 0):
+	def model(self,newContent):
 
-		model = Word2Vec(newContent,size = size,window = window, min_count=min_count, sg=1)#initialize the w2v model
+		model = Word2Vec(newContent, size=400, window=5, min_count=2, sg=1)#initialize the w2v model
 
-		if mode == 0:
+		wordList = list(model.wv.vocab.keys())#get the vocabulary list
 
-			wordList = list(model.wv.vocab.keys())#get the vocabulary list
-
-			self.wordIndex = {word: index for index, word in enumerate(wordList)}#put index and vocabulary in dict
-
-			return model,wordList
-
-		if mode == 1:
-
-			keyList = list(model.wv.vocab.keys())
-
-			self.keyIndex = {word: index for index, word in enumerate(keyList)}
-
-			return model,keyList
-
-	def get_key_index(self,sentence):
-		sequence = []
-		for word in sentence:
-			try:
-				sequence.append(self.keyIndex[word])
-			except KeyError:
-				pass
-		return sequence
-
+		self.wordIndex = {word: index for index, word in enumerate(wordList)}#put index and vocabulary in dict
+		return model,wordList
 
 	def get_index(self,sentence):#turn word to index
 		sequence = []
@@ -93,15 +67,6 @@ class word2vec():
 		
 		trainingIndex = list(map(self.get_index,newContent))#get the sequenced sentence
 
-		key_w2v_model,keyList = self.model(self.keyWord,size = 10,window = 1,min_count = 1,mode = 1)
-
-		key_embedding_matrix = np.zeros((len(keyList), key_w2v_model.vector_size))
-
-		for i in range(len(keyList)):
-			key_embedding_matrix[i] = key_w2v_model.wv[keyList[i]]
-
-		keyValue = list(map(self.get_key_index,self.keyWord))
-
-		return trainingIndex,embeddings_matrix,self.wordIndex,keyValue,key_embedding_matrix,self.keyIndex,keyList
+		return trainingIndex,embeddings_matrix,self.wordIndex
 
 
