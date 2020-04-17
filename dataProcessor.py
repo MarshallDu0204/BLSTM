@@ -13,6 +13,7 @@ class dataProcessor():
 
 	def readTrainingData(self,path = "data.csv"):
 		trainingData = []
+		label = []
 		userID = []
 		keywords = []
 		content = []
@@ -22,6 +23,7 @@ class dataProcessor():
 				trainingData.append(line)
 			trainingData = trainingData[1:len(trainingData)-1]
 			for element in trainingData:
+				#if element[2]=='0' or element[2]=='1':
 				userID.append(element[3])
 				keywords.append(element[4])
 				content.append(element[5])

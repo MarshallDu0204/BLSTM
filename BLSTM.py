@@ -8,10 +8,11 @@ import csv
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
-from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout,TimeDistributed,Flatten
+from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout,TimeDistributed,Flatten,Multiply
+from keras_self_attention import SeqSelfAttention
 from keras.callbacks import ModelCheckpoint
 from keras.utils.vis_utils import plot_model
-
+from keras import Input,Model
 
 class rnnRunner():
 
@@ -53,14 +54,14 @@ class rnnRunner():
 		self.wordIndex = wordIndex
 
 		self.maxlen = 60#the median of the reddit length is 58.5 so 60 is used
-		trainingData = pad_sequences(trainingData, maxlen=self.maxlen,padding = 'post')#convert all the reddit to length of 65
+		trainingData = pad_sequences(trainingData, maxlen=self.maxlen,padding = 'post')#convert all the reddit to length of 60
 
-		label = keras.utils.to_categorical(label,num_classes = 6)#convert the label to one_hot number can be adjust to final category num
+		label = keras.utils.to_categorical(label,num_classes = 2)#convert the label to one_hot number can be adjust to final category num
 
 		data_train, data_test, label_train, label_test = train_test_split(#split the training set and testing set
 			trainingData,
 			label,
-			test_size=0.1,
+			test_size=0.2,
 			random_state=42,
 			shuffle=True)
 
@@ -86,30 +87,38 @@ class BLSTM():
 
 	def lstmModel(self,pretrained_weights = None):
 
-		model = Sequential()
+		inputContent = Input(shape = (self.maxlen,),name = 'content')
 
-		model.add(Embedding(
+		content = Embedding(
 				input_dim = self.embedding_matrix.shape[0],
 				output_dim = self.embedding_matrix.shape[1],
 				input_length = self.maxlen,
 				weights = [self.embedding_matrix],#use the index to retrive the word vector from embedding_matrix
 				trainable = False
-				))
+				)(inputContent)
 
-		model.add(Bidirectional(LSTM(400,return_sequences=True,activation = 'tanh',recurrent_dropout=0.25),merge_mode='concat'))#merge two lstm together
-		model.add(Dropout(0.5))
+		Attention = SeqSelfAttention(attention_activation='tanh')(content)
+		Attention = Dropout(0.4)(Attention)
 
-		model.add(TimeDistributed(Dense(200,activation='relu')))
+		content = Bidirectional(LSTM(400,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(content)
+		content = Dropout(0.4)(content)
+
+		content = Bidirectional(LSTM(400,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(content)
+		content = Dropout(0.4)(content)
+
+		content = Multiply()([Attention,content])
+
+		content = Flatten()(content)
+
+		content = Dense(100,activation = 'relu')(content)
+
+		content = Dropout(0.4)(content)
+
+		output = Dense(2,activation = 'softmax')(content)
+
+		model = Model(inputs=inputContent, outputs=[output])
 		
-		model.add(Flatten())
-
-		model.add(Dense(100,activation = 'relu'))
-
-		model.add(Dropout(0.5))
-		
-		model.add(Dense(6, activation='softmax'))#softmax output
-		
-		plot_model(model, to_file='model.png', show_shapes=True)
+		#plot_model(model, to_file='model.png', show_shapes=True)
 
 		model.compile(
 			optimizer='rmsprop',
@@ -131,9 +140,35 @@ class BLSTM():
 			y = self.label_train,
 			validation_data = [self.data_test,self.label_test],
 			batch_size = 20,
-			epochs = 40,
+			epochs = 20,
 			callbacks = [model_checkpoint]
 		)
+
+	def evaluate(self,model,testData,testLabel,modelPath = None):
+
+		if(modelPath):
+			model.load_weights(modelPath)
+
+		result = model.predict(testData,batch_size = 20)#predict the result
+
+		i = 0
+		resultList = []
+		while i!=len(result):
+			resultList.append(np.argmax(result[i]))#argmax to extract the max possibility of given 10 result of softmax layer
+			i+=1
+
+		accNum = 0
+
+		i = 0
+		while i!=len(resultList):
+			if(resultList[i] == np.argmax(testLabel[i])):
+				accNum+=1
+			i+=1
+		accNum = accNum/len(resultList)
+
+		print(accNum)
+
+
 
 	def predictResult(self,model,rnnRunner,testDataPath = "validation.csv",outputPath = "class.csv"):
 
@@ -164,11 +199,12 @@ def main():
 	runner.preProcessData()
 	data_train,data_test,label_train,label_test,embedding_matrix,maxlen = runner.getData()
 
-
 	rnn = BLSTM(data_train,data_test,label_train,label_test,embedding_matrix,maxlen)
 	model = rnn.lstmModel()
 	rnn.train(model)
-	rnn.predictResult(model,runner)
+
+	rnn.evaluate(model,data_test,label_test)	
+	#rnn.predictResult(model,runner)
 	
 
 if __name__ == '__main__':
