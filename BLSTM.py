@@ -8,11 +8,13 @@ import csv
 from keras.preprocessing.sequence import pad_sequences
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
-from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout,TimeDistributed,Flatten,Multiply
-from keras_self_attention import SeqSelfAttention
+from keras.layers import Embedding,Dense,Bidirectional,LSTM,Dropout,TimeDistributed,Flatten,InputSpec
 from keras.callbacks import ModelCheckpoint
 from keras.utils.vis_utils import plot_model
 from keras import Input,Model
+from keras import backend as K
+from keras.engine.topology import Layer
+from keras import initializers as initializers, regularizers, constraints
 
 class rnnRunner():
 
@@ -67,6 +69,61 @@ class rnnRunner():
 
 		return data_train,data_test,label_train,label_test,embedding_matrix,self.maxlen
 
+class Attention(Layer):
+
+	def __init__(self, return_attention=False, **kwargs):
+		self.init = initializers.get('uniform')
+		self.supports_masking = True
+		self.return_attention = return_attention
+		super(Attention, self).__init__(**kwargs)
+
+	def build(self, input_shape):
+		self.input_spec = [InputSpec(ndim=3), InputSpec(ndim=3)]
+		assert isinstance(input_shape, list)
+
+		self.w = self.add_weight(shape=(input_shape[1][2], 1),
+								 name='{}_w'.format(self.name),
+								 initializer=self.init)
+		self._trainable_weights = [self.w]
+		super(Attention, self).build(input_shape)
+
+	def call(self, x):
+		assert isinstance(x, list)
+
+		s, h = x
+
+		h_shape = K.shape(h)  
+		d_w, T = h_shape[0], h_shape[1]
+		logits = K.dot(h, self.w)
+		logits = K.reshape(logits, (d_w, T))
+		alpha = K.exp(logits - K.max(logits, axis=-1, keepdims=True))
+		alpha = alpha / K.sum(alpha, axis=1, keepdims=True)
+
+		r = K.sum(s * K.expand_dims(alpha), axis = 1)
+		h_star = K.tanh(r)
+
+		if self.return_attention:
+			return [h_star, alpha]
+		return h_star
+
+	def compute_output_shape(self, input_shape):
+		assert isinstance(input_shape, list)
+		output_len = input_shape[1][2]
+		if self.return_attention:
+			return [(input_shape[1][0], output_len), (input_shape[1][0], input_shape[1][1])]
+		return (input_shape[1][0], output_len)
+
+	def compute_mask(self, input, input_mask=None):
+		if isinstance(input_mask, list):
+			return [None] * len(input_mask)
+		else:
+			return None
+
+	def get_config(self):
+		config = {'init':self.init,'supports_masking':self.supports_masking,'return_attention':self.return_attention}
+		base_config = super(Attention,self).get_config()
+		return dict(list(base_config.items()) + list(config.items()))
+
 class BLSTM():
 
 	data_train = ""
@@ -97,24 +154,21 @@ class BLSTM():
 				trainable = False
 				)(inputContent)
 
-		Attention = SeqSelfAttention(attention_activation='tanh')(content)
-		Attention = Dropout(0.4)(Attention)
+		lstmContent = Bidirectional(LSTM(100,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(content)
+		lstmContent = Dropout(0.4)(lstmContent)
 
-		content = Bidirectional(LSTM(400,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(content)
-		content = Dropout(0.4)(content)
+		lstmContent = Bidirectional(LSTM(100,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(lstmContent)
+		lstmContent = Dropout(0.4)(lstmContent)
 
-		content = Bidirectional(LSTM(400,return_sequences=True,recurrent_dropout=0.25),merge_mode='ave')(content)
-		content = Dropout(0.4)(content)
+		weightContent = Dense(200,activation = 'relu')(content)
 
-		content = Multiply()([Attention,content])
+		attContent = Attention()([lstmContent,weightContent])
 
-		content = Flatten()(content)
+		attContent = Dense(128,activation = 'relu')(attContent)
 
-		content = Dense(100,activation = 'relu')(content)
+		attContent = Dropout(0.4)(attContent)
 
-		content = Dropout(0.4)(content)
-
-		output = Dense(2,activation = 'softmax')(content)
+		output = Dense(2,activation = 'softmax')(attContent)
 
 		model = Model(inputs=inputContent, outputs=[output])
 		
@@ -123,7 +177,7 @@ class BLSTM():
 		model.compile(
 			optimizer='rmsprop',
 			loss='categorical_crossentropy',
-			metrics=['accuracy']
+			metrics=['acc']
 		)
 
 		if(pretrained_weights):
@@ -138,9 +192,9 @@ class BLSTM():
 		history = model.fit(
 			x = self.data_train,
 			y = self.label_train,
-			validation_data = [self.data_test,self.label_test],
+			validation_data = (self.data_test,self.label_test),
 			batch_size = 20,
-			epochs = 20,
+			epochs = 10,
 			callbacks = [model_checkpoint]
 		)
 

@@ -16,13 +16,13 @@ class word2vec():
 				trainingData.append(line)
 			trainingData = trainingData[1:len(trainingData)-1]
 			for element in trainingData:
-				'''
+				
 				if element[2]=='1' or element[2]=='3':
 					label.append('1')
 				else:
 					label.append('0')  
-				'''
-				label.append(element[2])
+				
+				#label.append(element[2])
 		return label
 
 	def readData(self):#read the processed data
