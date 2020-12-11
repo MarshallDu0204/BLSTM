@@ -43,7 +43,7 @@ class word2vec():
 
 	def model(self,newContent):
 
-		model = Word2Vec(newContent, size=400, window=5, min_count=2, sg=1)#initialize the w2v model
+		model = Word2Vec(newContent, size=100, window=10, min_count=2, sg=1)#initialize the w2v model
 
 		wordList = list(model.wv.vocab.keys())#get the vocabulary list
 
