@@ -130,7 +130,7 @@ class BLSTM():
         lstmContent = Bidirectional(LSTM(100,return_sequences=True,recurrent_dropout=0.2),merge_mode='ave')(content)
         lstmContent = Dropout(0.3)(lstmContent)
 
-        lstmContent = Bidirectional(LSTM(100,return_sequences=True,recurrent_dropout=0.2),merge_mode='ave')(content)
+        lstmContent = Bidirectional(LSTM(100,return_sequences=True,recurrent_dropout=0.2),merge_mode='ave')(lstmContent)
         lstmContent = Dropout(0.3)(lstmContent)
 
         attContent = AttentionLayer()(lstmContent)
