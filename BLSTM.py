@@ -162,7 +162,7 @@ class BLSTM():
             y = self.label_train,
             validation_data = (self.data_test,self.label_test),
             batch_size = 8,
-            epochs = 15,
+            epochs = 30,
             callbacks = [model_checkpoint]
         )
 
