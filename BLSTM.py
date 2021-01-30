@@ -64,7 +64,7 @@ class rnnRunner():
             trainingData,
             label,
             test_size=0.2,
-            random_state=42,
+            random_state=None,
             shuffle=True)
 
         return data_train,data_test,label_train,label_test,embedding_matrix,self.maxlen
